@@ -1,9 +1,9 @@
 #include "main.h"
 
-int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE prevInstance, PSTR cmdLine, int cmdShow)
+int WINAPI _tWinMain(HINSTANCE hInstance, HINSTANCE prevInstance, PSTR cmdLine, int cmdShow)
 {
 	// Create console for debug output.
-	// TODO: Output debug information to file (configureable).
+	// TODO: Output debug information to file (configurable).
 	if (AllocConsole())
 	{
 		FILE* fi = 0;
@@ -13,12 +13,10 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE prevInstance, PSTR cmdLine, i
 	// Create window.
 	static TCHAR appName[] = TEXT("Chip-8 Emulator");
 	MSG msg;
-	WNDCLASS wndclass;
+	WNDCLASS wndclass = { 0 };
 
-	wndclass.style = CS_HREDRAW | CS_VREDRAW;
-	wndclass.lpfnWndProc = WndProc;
-	wndclass.cbClsExtra = 0;
-	wndclass.cbWndExtra = 0;
+	wndclass.style = CS_HREDRAW | CS_VREDRAW;	// Redraw the window for any movement / size adjustment.
+	wndclass.lpfnWndProc = WindowProcedure;
 	wndclass.hInstance = hInstance;
 	wndclass.hIcon = LoadIcon(NULL, IDI_APPLICATION);
 	wndclass.hCursor = LoadCursor(NULL, IDC_ARROW);
@@ -31,7 +29,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE prevInstance, PSTR cmdLine, i
 	}
 
 	// TODO: Create constants for window offset added in below?
-	_hwnd = CreateWindow(appName, TEXT("Chip-8 Emulator"), WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, (DISPLAY_WIDTH * PIXEL_SIZE) + 16, (DISPLAY_HEIGHT * PIXEL_SIZE) + 39, NULL, NULL, hInstance, NULL);
+	_hwnd = CreateWindow(appName, appName, WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, (DISPLAY_WIDTH * PIXEL_SIZE) + 16, (DISPLAY_HEIGHT * PIXEL_SIZE) + 39, NULL, NULL, hInstance, NULL);
 
 	ShowWindow(_hwnd, cmdShow);
 	UpdateWindow(_hwnd);
@@ -40,6 +38,10 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE prevInstance, PSTR cmdLine, i
 	printf("Starting!\n");
 	load_font_sprites();
 	load_rom_from_file();
+
+	// Set start time so that clock speed can be emulated based on elapsed time.
+	QueryPerformanceFrequency(&qpc_frequency);
+	QueryPerformanceCounter(&previous_clock_time);
 
 	hRunMutex = CreateMutexW(NULL, TRUE, NULL);
 
@@ -52,19 +54,19 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE prevInstance, PSTR cmdLine, i
 		DispatchMessage(&msg);
 	}
 
-	// Release mutex to kill all running threads.
+	// Release mutex to kill associated threads.
 	if (hRunMutex)
 		ReleaseMutex(hRunMutex);
 
 	return msg.wParam;
 }
 
-LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
+LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	switch (message)
 	{
 	case WM_CREATE:
-		/* TODO: Add Initialization Code? */
+		// TODO: Center window on screen?
 		return 0;
 	case WM_PAINT:
 		draw_display(hwnd);
@@ -80,8 +82,20 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 }
 
 int execute() {
-	do
+
+	// TODO: Update to run at a user-configurable clock speed.
+	// TODO: Update for single-step mode with user intput.
+	// TODO: Update to allow loop to be exited gracefully.
+	while (true)
 	{
+		// Skip execution if not enough time has passed to reach next clock cycle.
+		if (waiting_for_next_clock_cycle())
+			continue;
+
+		// Verify that program counter does not point past the end of memory.
+		if ((size_t)(program_counter + 1) > sizeof(memory))
+			break;	// TODO: Error handling.
+
 		// Fetch instruction from memory using program counter.
 		uint16_t instruction = (memory[program_counter] << 8) ^ memory[program_counter + 1];
 
@@ -350,6 +364,9 @@ int execute() {
 				}
 			}
 
+			// Request that the main window be redrawn.
+			RedrawWindow(_hwnd, NULL, NULL, RDW_INVALIDATE);
+
 			break;
 
 		case 0xE:  // 0xEXNN
@@ -565,28 +582,21 @@ int execute() {
 			NOT_IMPLEMENTED;
 			break;
 		}
-		// TODO: Update to run at 700 commands per second (configureable).
-		// TODO: Update for single-step mode with user intput.
-	} while (WaitForSingleObject(hRunMutex, 1) == WAIT_TIMEOUT);
+	}
 
 	return 0;
 }
 
-/*
-	TODO: Need to improve implementation to only re-draw pixels which have been updated.
-	Current implementation causes major issue with speed of execution which impacts
-	overall functionality/capabilities.
-*/
 void draw_display(HWND hwnd) {
-	PAINTSTRUCT ps;
-	HDC hdc = BeginPaint(hwnd, &ps);
 
+	PAINTSTRUCT ps;
 	HBRUSH whiteBrush = CreateSolidBrush(RGB(255, 255, 255));
 	HBRUSH blackBrush = CreateSolidBrush(RGB(0, 0, 0));
+
+	HDC hdc = BeginPaint(hwnd, &ps);
 	SelectObject(hdc, whiteBrush);
 
-	// static bool prevDisplay[DISPLAY_HEIGHT][DISPLAY_WIDTH] = { 0 };
-
+	// TODO: Optimize to only re-draw pixels which have changed?
 	for (int i = 0; i < DISPLAY_HEIGHT; i++) {
 		for (int j = 0; j < DISPLAY_WIDTH; j++) {
 
@@ -604,12 +614,7 @@ void draw_display(HWND hwnd) {
 		}
 	}
 
-	// memcpy(prevDisplay, &display, sizeof(display));
-	// redrawDisplay = false;
-
 	EndPaint(hwnd, &ps);
-
-	RedrawWindow(hwnd, NULL, NULL, RDW_INVALIDATE);
 }
 
 void clear_display() {
@@ -640,12 +645,15 @@ void load_rom_from_file() {
 	//fp = fopen("roms/2-ibm-logo.ch8", "rb");
 	//fp = fopen("roms/3-corax+.ch8", "rb");
 	//fp = fopen("roms/4-flags.ch8", "rb");
-	fp = fopen("roms/5-quirks.ch8", "rb");		// Requires inputs + timers.
-	//fp = fopen("roms/6-keypad.ch8", "rb");	// Requires inputs + timers.
+	//fp = fopen("roms/5-quirks.ch8", "rb");
+	//fp = fopen("roms/6-keypad.ch8", "rb");
 
 	// Additional test ROMs.
 	//fp = fopen("roms/delay_timer_test.ch8", "rb");	// Source: https://github.com/mattmikolay/chip-8/tree/master/delaytimer
 	//fp = fopen("roms/random_number_test.ch8", "rb");	// Source: https://github.com/mattmikolay/chip-8/tree/master/randomnumber
+
+	// Non-test ROMs.
+	fp = fopen("roms/snake.ch8", "rb");
 
 	// Determine file size by seeking to the end of the file and getting the current file position.
 	fseek(fp, 0, SEEK_END);
@@ -701,4 +709,31 @@ void decrement_timers() {
 	} while (WaitForSingleObject(hRunMutex, 16) == WAIT_TIMEOUT);	// TODO: Update to run with a period of 16.6 ms.
 
 	return;
+}
+
+bool waiting_for_next_clock_cycle()
+{
+	bool is_waiting = true;
+
+	LARGE_INTEGER current_time = { 0 };
+	LARGE_INTEGER microseconds_since_last_clock_cycle = { 0 };
+	unsigned int microseconds_per_second = 1000000;
+
+	// Determine the number of microseconds that have elapsed since the previous clock cycle.
+	QueryPerformanceCounter(&current_time);
+	microseconds_since_last_clock_cycle.QuadPart = current_time.QuadPart - previous_clock_time.QuadPart;
+	microseconds_since_last_clock_cycle.QuadPart *= 1000000;
+	microseconds_since_last_clock_cycle.QuadPart /= qpc_frequency.QuadPart;
+
+	printf("Microsecond Elapsed: %llu\n", microseconds_since_last_clock_cycle.QuadPart);
+
+	// Determine if enough time has passed to reach the next clock cycle based on the period.
+	if (microseconds_since_last_clock_cycle.QuadPart > (microseconds_per_second / execution_clock_speed))
+	{
+		// Update saved timestamp if new clock cycle is reached.
+		QueryPerformanceCounter(&previous_clock_time);
+		is_waiting = false;
+	}
+
+	return is_waiting;
 }

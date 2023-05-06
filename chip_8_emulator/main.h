@@ -10,6 +10,7 @@
 
 // Includes for Windows GUI functionality.
 #include <windows.h>
+#include <tchar.h>
 
 // Includes for the standalone debug console.
 #include <io.h>
@@ -18,7 +19,7 @@
 // Constants that define the size of the Chip-8 display.
 #define DISPLAY_HEIGHT 32
 #define DISPLAY_WIDTH 64
-#define PIXEL_SIZE 10
+#define PIXEL_SIZE 10	// TODO: Allow display to be dynamically resized.
 
 // Constants that define font/sprite memory addresses.
 #define FONT_ADDR_START 0x50
@@ -49,7 +50,14 @@
 // Handle used to create/reference the main window.
 HANDLE _hwnd;
 
-// Handle used to control execution speed.
+// Values used to track QPC time and execution speed.
+LARGE_INTEGER previous_clock_time;
+LARGE_INTEGER qpc_frequency;
+unsigned int execution_clock_speed = 700;
+
+// TODO: Values for display refresh rate and timer decrement rate (60 Hz);
+
+// TODO: Mutex to prevent contention for timer registers.
 HANDLE hRunMutex;
 
 // ---- Chip-8-specific memory and registers. ----//
@@ -77,10 +85,10 @@ uint8_t v_reg[0x10];
 bool display[DISPLAY_HEIGHT][DISPLAY_WIDTH];
 
 // TODO: Flag to indicate that the display should be completely redrawn.
-// bool redrawDisplay = true;
+bool redrawDisplay = true;
 
 // Processes messages sent to GUI window.
-LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
+LRESULT CALLBACK WindowProcedure(HWND, UINT, WPARAM, LPARAM);
 
 // Performs fetch-decode-execute loop.
 int execute();
@@ -99,3 +107,6 @@ void load_font_sprites();
 
 // Decrements the delay and sound timers at 60Hz.
 void decrement_timers();
+
+// Return true if not enough time has passed to execute a new command.
+bool waiting_for_next_clock_cycle();
