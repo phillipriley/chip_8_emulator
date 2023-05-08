@@ -110,3 +110,6 @@ void decrement_timers();
 
 // Return true if not enough time has passed to execute a new command.
 bool waiting_for_next_clock_cycle();
+
+// Create a disassembled version of the currently loaded ROM.
+bool disassemble();
