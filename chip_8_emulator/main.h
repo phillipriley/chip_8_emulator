@@ -21,12 +21,13 @@
 #define DISPLAY_WIDTH 64
 #define PIXEL_SIZE 10	// TODO: Allow display to be dynamically resized.
 
-// Constants that define font/sprite memory addresses.
+// Constants that define font/sprite memory addresses and data size.
 #define FONT_ADDR_START 0x50
 #define FONT_ADDR_END 0x9F
+#define FONT_CHARACTER_SIZE_BYTES 0x5
 
 // Constants that define configureable functionality for ambiguous functionality.
-#define SHIFT_COPY 0	// TODO: Implement functionality to copy VY --> VX for 8XY6/8XYE.
+#define SHIFT_COPY 1	// TODO: Implement functionality to copy VY --> VX for 8XY6/8XYE.
 
 // TODO: Define constants that can be turned on/off for debugging.
 

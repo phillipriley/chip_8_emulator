@@ -177,7 +177,7 @@ int execute() {
 
 		case 0x8:
 
-			uint8_t temp;
+			uint8_t temp = 0;
 
 			switch (n) {
 			case 0x0: // 0x8XY0
@@ -188,16 +188,19 @@ int execute() {
 			case 0x1: // 0x8XY1
 				printf("Set VX to VX OR VY.\n");
 				v_reg[vx] |= v_reg[vy];
+				v_reg[0xF] = temp;
 				break;
 
 			case 0x2: // 0x8XY2
 				printf("Set VX to VX AND VY.\n");
 				v_reg[vx] &= v_reg[vy];
+				v_reg[0xF] = temp;
 				break;
 
 			case 0x3: // 0x8XY3
 				printf("Set VX to VX XOR VY.\n");
 				v_reg[vx] ^= v_reg[vy];
+				v_reg[0xF] = temp;
 				break;
 
 			case 0x4: // 0x8XY4
@@ -525,7 +528,7 @@ int execute() {
 
 			case 0x29:  // 0xFX29
 				printf("Set I to the memory address of the sprite data corresponding to the hexadecimal digit stored in register VX.\n");
-				index_register = FONT_ADDR_START + v_reg[vx] - 0x1;
+				index_register = FONT_ADDR_START + (v_reg[vx] * FONT_CHARACTER_SIZE_BYTES);
 				break;
 
 			case 0x33:  // 0xFX33
