@@ -97,7 +97,7 @@ void execute() {
 	{
 		// Skip execution if not enough time has passed to reach next clock cycle.
 		if (waiting_for_next_cpu_clock_cycle())
-			continue;	
+			continue;
 
 		// Verify that program counter does not point past the end of memory.
 		if ((size_t)(program_counter + 1) > sizeof(memory))
@@ -656,8 +656,8 @@ void load_rom_from_file() {
 	//fp = fopen("roms/2-ibm-logo.ch8", "rb");
 	//fp = fopen("roms/3-corax+.ch8", "rb");
 	//fp = fopen("roms/4-flags.ch8", "rb");
-	//fp = fopen("roms/5-quirks.ch8", "rb");
-	//fp = fopen("roms/6-keypad.ch8", "rb");
+	//fp = fopen("roms/5-quirks.ch8", "rb");	// TODO: "Disp. Wait" error.
+	//fp = fopen("roms/6-keypad.ch8", "rb");	// TODO: "NOT RELEASED" error.
 
 	// Additional test ROMs.
 	//fp = fopen("roms/delay_timer_test.ch8", "rb");	// Source: https://github.com/mattmikolay/chip-8/tree/master/delaytimer
@@ -718,7 +718,7 @@ void refresh_screen_and_decrement_timers() {
 			continue;
 
 		EnterCriticalSection(&critical_section);
-		
+
 		if (delay_timer > 0)
 			delay_timer--;
 
@@ -791,6 +791,7 @@ bool disassemble()
 {
 	// TODO: Update to disassemble recursively (versus current linear implementation).
 	//		 Current implementation will treat data (such as sprites) as bad op_codes.
+	//       https://reverseengineering.stackexchange.com/questions/2347/what-is-the-algorithm-used-in-recursive-traversal-disassembly
 
 	// TODO: Update to read directly from file (decouple from loading ROM into memory).
 
@@ -798,7 +799,7 @@ bool disassemble()
 	char output_string[255] = "";
 
 	// TODO: Create files in an output directory.
-	fp = fopen("snake.txt", "w");
+	fp = fopen("disassembled_rom.txt", "w");
 
 	// TODO: Constant for initial memory offset.
 	uint16_t current_position = 0x200;
