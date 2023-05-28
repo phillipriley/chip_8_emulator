@@ -54,12 +54,17 @@ HANDLE _hwnd;
 // Values used to track QPC time and execution speed.
 LARGE_INTEGER previous_clock_time;
 LARGE_INTEGER qpc_frequency;
-unsigned int execution_clock_speed = 700;
+unsigned int execution_clock_speed_hz = 700;
 
-// TODO: Values for display refresh rate and timer decrement rate (60 Hz);
+// Values for screen refresh rate and timer decrement rate (60 Hz);
+LARGE_INTEGER previous_refresh_time;
+unsigned int refresh_and_timer_rate_hz = 60;
 
-// TODO: Mutex to prevent contention for timer registers.
-HANDLE hRunMutex;
+// Critical section to prevent contention for timer variables.
+CRITICAL_SECTION critical_section;
+
+// Flag to track if execution is currently running which is used to exit threads at application close.
+bool is_running = true;
 
 // ---- Chip-8-specific memory and registers. ----//
 // Memory (4 kilobytes)
@@ -92,7 +97,7 @@ bool redrawDisplay = true;
 LRESULT CALLBACK WindowProcedure(HWND, UINT, WPARAM, LPARAM);
 
 // Performs fetch-decode-execute loop.
-int execute();
+void execute();
 
 // Draws the saved display state to the window.
 void draw_display(HWND hwnd);
@@ -107,10 +112,13 @@ void load_rom_from_file();
 void load_font_sprites();
 
 // Decrements the delay and sound timers at 60Hz.
-void decrement_timers();
+void refresh_screen_and_decrement_timers();
 
 // Return true if not enough time has passed to execute a new command.
-bool waiting_for_next_clock_cycle();
+bool waiting_for_next_cpu_clock_cycle();
+
+// Return true if not enough time has passed to refresh the screen and decrement timers.
+bool waiting_for_next_refresh_and_timer_cycle();
 
 // Create a disassembled version of the currently loaded ROM.
 bool disassemble();

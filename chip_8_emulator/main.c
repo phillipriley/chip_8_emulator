@@ -39,24 +39,31 @@ int WINAPI _tWinMain(HINSTANCE hInstance, HINSTANCE prevInstance, PSTR cmdLine, 
 	load_font_sprites();
 	load_rom_from_file();
 
+	// TODO: Update implementation to set number of cycles per frame (rather than two counters).
 	// Set start time so that clock speed can be emulated based on elapsed time.
 	QueryPerformanceFrequency(&qpc_frequency);
 	QueryPerformanceCounter(&previous_clock_time);
+	QueryPerformanceCounter(&previous_refresh_time);
 
-	hRunMutex = CreateMutexW(NULL, TRUE, NULL);
+	// Initialize the critical section one time only.
+	if (!InitializeCriticalSectionAndSpinCount(&critical_section,
+		0x00000400))
+		return;
 
 	// TODO: Resolve warnings on the following two lines (and elsewhere).
 	(HANDLE)_beginthread(execute, 0);
-	(HANDLE)_beginthread(decrement_timers, 0);
+	(HANDLE)_beginthread(refresh_screen_and_decrement_timers, 0);
 
 	while (GetMessage(&msg, NULL, 0, 0)) {
 		TranslateMessage(&msg);
 		DispatchMessage(&msg);
 	}
 
-	// Release mutex to kill associated threads.
-	if (hRunMutex)
-		ReleaseMutex(hRunMutex);
+	// Set flag to stop threads from running.
+	is_running = false;
+
+	// Release resources used by the critical section object.
+	DeleteCriticalSection(&critical_section);
 
 	return msg.wParam;
 }
@@ -81,16 +88,16 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
 	return DefWindowProc(hwnd, message, wParam, lParam);
 }
 
-int execute() {
+void execute() {
 
 	// TODO: Update to run at a user-configurable clock speed.
 	// TODO: Update for single-step mode with user intput.
 	// TODO: Update to allow loop to be exited gracefully.
-	while (true)
+	while (is_running)
 	{
 		// Skip execution if not enough time has passed to reach next clock cycle.
-		if (waiting_for_next_clock_cycle())
-			continue;
+		if (waiting_for_next_cpu_clock_cycle())
+			continue;	
 
 		// Verify that program counter does not point past the end of memory.
 		if ((size_t)(program_counter + 1) > sizeof(memory))
@@ -367,9 +374,6 @@ int execute() {
 				}
 			}
 
-			// Request that the main window be redrawn.
-			RedrawWindow(_hwnd, NULL, NULL, RDW_INVALIDATE);
-
 			break;
 
 		case 0xE:  // 0xEXNN
@@ -513,12 +517,20 @@ int execute() {
 
 			case 0x15:  // 0xFX15
 				printf("Set the delay timer to the value of register VX.\n");
+
+				EnterCriticalSection(&critical_section);
 				delay_timer = v_reg[vx];
+				LeaveCriticalSection(&critical_section);
+
 				break;
 
 			case 0x18:  // 0xFX18
 				printf("Set the sound timer to the value of register VX.\n");
+
+				EnterCriticalSection(&critical_section);
 				sound_timer = v_reg[vx];
+				LeaveCriticalSection(&critical_section);
+
 				break;
 
 			case 0x1E:  // 0xFX1E
@@ -587,7 +599,7 @@ int execute() {
 		}
 	}
 
-	return 0;
+	_endthread();
 }
 
 void draw_display(HWND hwnd) {
@@ -627,9 +639,6 @@ void clear_display() {
 			display[i][j] = false;
 		}
 	}
-
-	// Redraw blank screen.
-	draw_display(_hwnd);
 }
 
 void load_rom_from_file() {
@@ -638,7 +647,6 @@ void load_rom_from_file() {
 	// Read contents of ROM file.
 	// TODO: Allow selection / configuration of ROMs (i.e. don't hardcode file names).
 	// TODO: Add error handling (missing files, corruption, etc.).
-	// TODO: Scan files for unsupported instructions prior to loading?
 	// TODO: Generate file that contains disassembled output.
 	FILE* fp;
 
@@ -701,9 +709,16 @@ void load_font_sprites() {
 	}
 }
 
-void decrement_timers() {
+void refresh_screen_and_decrement_timers() {
 
-	do {
+	while (is_running)
+	{
+		// Skip execution if not enough time has passed to reach next refresh/timer cycle.
+		if (waiting_for_next_refresh_and_timer_cycle())
+			continue;
+
+		EnterCriticalSection(&critical_section);
+		
 		if (delay_timer > 0)
 			delay_timer--;
 
@@ -712,12 +727,17 @@ void decrement_timers() {
 			// TODO: Play sound.
 			sound_timer--;
 		}
-	} while (WaitForSingleObject(hRunMutex, 16) == WAIT_TIMEOUT);	// TODO: Update to run with a period of 16.6 ms.
 
-	return;
+		LeaveCriticalSection(&critical_section);
+
+		// Request that the main window be redrawn.
+		RedrawWindow(_hwnd, NULL, NULL, RDW_INVALIDATE);
+	}
+
+	_endthread();
 }
 
-bool waiting_for_next_clock_cycle()
+bool waiting_for_next_cpu_clock_cycle()
 {
 	bool is_waiting = true;
 
@@ -732,10 +752,35 @@ bool waiting_for_next_clock_cycle()
 	microseconds_since_last_clock_cycle.QuadPart /= qpc_frequency.QuadPart;
 
 	// Determine if enough time has passed to reach the next clock cycle based on the period.
-	if (microseconds_since_last_clock_cycle.QuadPart > (microseconds_per_second / execution_clock_speed))
+	if (microseconds_since_last_clock_cycle.QuadPart > (microseconds_per_second / execution_clock_speed_hz))
 	{
 		// Update saved timestamp if new clock cycle is reached.
 		QueryPerformanceCounter(&previous_clock_time);
+		is_waiting = false;
+	}
+
+	return is_waiting;
+}
+
+bool waiting_for_next_refresh_and_timer_cycle()
+{
+	bool is_waiting = true;
+
+	LARGE_INTEGER current_time = { 0 };
+	LARGE_INTEGER microseconds_since_last_clock_cycle = { 0 };
+	unsigned int microseconds_per_second = 1000000;
+
+	// Determine the number of microseconds that have elapsed since the previous clock cycle.
+	QueryPerformanceCounter(&current_time);
+	microseconds_since_last_clock_cycle.QuadPart = current_time.QuadPart - previous_refresh_time.QuadPart;
+	microseconds_since_last_clock_cycle.QuadPart *= 1000000;
+	microseconds_since_last_clock_cycle.QuadPart /= qpc_frequency.QuadPart;
+
+	// Determine if enough time has passed to reach the next clock cycle based on the period.
+	if (microseconds_since_last_clock_cycle.QuadPart > (microseconds_per_second / refresh_and_timer_rate_hz))
+	{
+		// Update saved timestamp if new clock cycle is reached.
+		QueryPerformanceCounter(&previous_refresh_time);
 		is_waiting = false;
 	}
 
