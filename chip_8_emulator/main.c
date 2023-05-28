@@ -92,7 +92,6 @@ void execute() {
 
 	// TODO: Update to run at a user-configurable clock speed.
 	// TODO: Update for single-step mode with user intput.
-	// TODO: Update to allow loop to be exited gracefully.
 	while (is_running)
 	{
 		// Skip execution if not enough time has passed to reach next clock cycle.
@@ -647,7 +646,6 @@ void load_rom_from_file() {
 	// Read contents of ROM file.
 	// TODO: Allow selection / configuration of ROMs (i.e. don't hardcode file names).
 	// TODO: Add error handling (missing files, corruption, etc.).
-	// TODO: Generate file that contains disassembled output.
 	FILE* fp;
 
 	// ---- Chip-8 Test Suite ----//
@@ -664,7 +662,8 @@ void load_rom_from_file() {
 	//fp = fopen("roms/random_number_test.ch8", "rb");	// Source: https://github.com/mattmikolay/chip-8/tree/master/randomnumber
 
 	// Non-test ROMs.
-	fp = fopen("roms/snake.ch8", "rb");
+	//fp = fopen("roms/snake.ch8", "rb");		// Source: https://github.com/JohnEarnest/chip8Archive/tree/master/src/snake
+	fp = fopen("roms/caveexplorer.ch8", "rb");	// Source: https://github.com/JohnEarnest/chip8Archive/tree/master/src/caveexplorer
 
 	// Determine file size by seeking to the end of the file and getting the current file position.
 	fseek(fp, 0, SEEK_END);
