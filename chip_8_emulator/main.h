@@ -19,15 +19,18 @@
 // Constants that define the size of the Chip-8 display.
 #define DISPLAY_HEIGHT 32
 #define DISPLAY_WIDTH 64
-#define PIXEL_SIZE 10	// TODO: Allow display to be dynamically resized.
+#define PIXEL_SIZE 10		// TODO: Allow display to be dynamically resized.
 
 // Constants that define font/sprite memory addresses and data size.
 #define FONT_ADDR_START 0x50
 #define FONT_ADDR_END 0x9F
 #define FONT_CHARACTER_SIZE_BYTES 0x5
 
+// Constant that defines the refresh rate for the screen.
+#define REFRESH_RATE_HZ 60
+
 // Constants that define configureable functionality for ambiguous functionality.
-#define SHIFT_COPY 1	// TODO: Implement functionality to copy VY --> VX for 8XY6/8XYE.
+#define SHIFT_COPY 1
 
 // TODO: Define constants that can be turned on/off for debugging.
 
@@ -51,19 +54,17 @@
 // Handle used to create/reference the main window.
 HANDLE _hwnd;
 
-// Values used to track QPC time and execution speed.
-LARGE_INTEGER previous_clock_time;
-LARGE_INTEGER qpc_frequency;
-unsigned int execution_clock_speed_hz = 700;
+// Value used to set the number of cycles executed per frame.
+unsigned int cycles_per_frame = 20;
 
-// Values for screen refresh rate and timer decrement rate (60 Hz);
+// Values to track QPC time and execution speed.
 LARGE_INTEGER previous_refresh_time;
-unsigned int refresh_and_timer_rate_hz = 60;
+LARGE_INTEGER qpc_frequency;
 
-// Critical section to prevent contention for timer variables.
+// Critical section used to prevent contention for user configureable values.
 CRITICAL_SECTION critical_section;
 
-// Flag to track if execution is currently running which is used to exit threads at application close.
+// Flag to track if the application is currently running which is used to gracefully exit threads.
 bool is_running = true;
 
 // ---- Chip-8-specific memory and registers. ----//
@@ -80,7 +81,7 @@ uint16_t index_register = 0;
 uint16_t stack[12];
 uint8_t stack_index = 0;
 
-// Timers used for sound and delays (60Hz).
+// Timers used for sound and delays.
 uint8_t delay_timer;
 uint8_t sound_timer;
 
@@ -90,19 +91,16 @@ uint8_t v_reg[0x10];
 // On/off state of display pixels.
 bool display[DISPLAY_HEIGHT][DISPLAY_WIDTH];
 
-// TODO: Flag to indicate that the display should be completely redrawn.
-bool redrawDisplay = true;
-
 // Processes messages sent to GUI window.
 LRESULT CALLBACK WindowProcedure(HWND, UINT, WPARAM, LPARAM);
 
-// Performs fetch-decode-execute loop.
-void execute();
+// Executes a specific number of commands based on a user configureable value.
+void execute_commands();
 
 // Draws the saved display state to the window.
 void draw_display(HWND hwnd);
 
-// Clears the saved display state and the Chip-8 display.
+// Clears the saved display state.
 void clear_display();
 
 // Loads the contents of a ROM file into memory.
@@ -111,14 +109,11 @@ void load_rom_from_file();
 // Loads sprites into the required location in memory.
 void load_font_sprites();
 
-// Decrements the delay and sound timers at 60Hz.
-void refresh_screen_and_decrement_timers();
+// Loops through screen refreshes and drives command execution.
+void refresh_screen();
 
-// Return true if not enough time has passed to execute a new command.
-bool waiting_for_next_cpu_clock_cycle();
-
-// Return true if not enough time has passed to refresh the screen and decrement timers.
-bool waiting_for_next_refresh_and_timer_cycle();
+// Return true if not enough time has passed to refresh the screen.
+bool waiting_for_next_refresh_cycle();
 
 // Create a disassembled version of the currently loaded ROM.
 bool disassemble();

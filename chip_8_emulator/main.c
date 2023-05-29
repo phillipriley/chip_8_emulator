@@ -39,20 +39,18 @@ int WINAPI _tWinMain(HINSTANCE hInstance, HINSTANCE prevInstance, PSTR cmdLine, 
 	load_font_sprites();
 	load_rom_from_file();
 
-	// TODO: Update implementation to set number of cycles per frame (rather than two counters).
-	// Set start time so that clock speed can be emulated based on elapsed time.
+	// Set start time so that refresh rate can be emulated based on elapsed time.
 	QueryPerformanceFrequency(&qpc_frequency);
-	QueryPerformanceCounter(&previous_clock_time);
 	QueryPerformanceCounter(&previous_refresh_time);
 
 	// Initialize the critical section one time only.
+	// Critical section used to protect user configureable values.
 	if (!InitializeCriticalSectionAndSpinCount(&critical_section,
 		0x00000400))
 		return;
 
-	// TODO: Resolve warnings on the following two lines (and elsewhere).
-	(HANDLE)_beginthread(execute, 0);
-	(HANDLE)_beginthread(refresh_screen_and_decrement_timers, 0);
+	// TODO: Resolve warnings on the following line (and elsewhere).
+	(HANDLE)_beginthread(refresh_screen, 0);
 
 	while (GetMessage(&msg, NULL, 0, 0)) {
 		TranslateMessage(&msg);
@@ -81,6 +79,7 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
 	case WM_DESTROY:
 		PostQuitMessage(0);
 		return 0;
+	// TODO: Capture keys that increase/decrease number of cycles per frame.
 	default:
 		break;
 	}
@@ -88,16 +87,15 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
 	return DefWindowProc(hwnd, message, wParam, lParam);
 }
 
-void execute() {
+void execute_commands() {
 
 	// TODO: Update to run at a user-configurable clock speed.
 	// TODO: Update for single-step mode with user intput.
-	while (is_running)
-	{
-		// Skip execution if not enough time has passed to reach next clock cycle.
-		if (waiting_for_next_cpu_clock_cycle())
-			continue;
 
+	unsigned int remaining_commands = cycles_per_frame;
+
+	while (remaining_commands > 0)
+	{
 		// Verify that program counter does not point past the end of memory.
 		if ((size_t)(program_counter + 1) > sizeof(memory))
 			break;	// TODO: Error handling.
@@ -421,7 +419,7 @@ void execute() {
 			case 0xA1:  // 0xEXA1
 				printf("Skip the following instruction if the key corresponding to the hex value currently stored in register VX is not pressed.\n");
 
-				if (v_reg[vx] == 0x1 && !KEY_PRESSED(0x31))			// 1 --> 1
+				if (v_reg[vx] == 0x1 && !KEY_PRESSED(0x31))				// 1 --> 1
 					program_counter += 2;
 				else if (v_reg[vx] == 0x2 && !KEY_PRESSED(0x32))		// 2 --> 2
 					program_counter += 2;
@@ -661,9 +659,9 @@ void execute() {
 			NOT_IMPLEMENTED;
 			break;
 		}
-	}
 
-	_endthread();
+		remaining_commands--;
+	}	
 }
 
 void draw_display(HWND hwnd) {
@@ -720,7 +718,7 @@ void load_rom_from_file() {
 	//fp = fopen("roms/3-corax+.ch8", "rb");
 	//fp = fopen("roms/4-flags.ch8", "rb");
 	//fp = fopen("roms/5-quirks.ch8", "rb");	// TODO: "Disp. Wait" error.
-	fp = fopen("roms/6-keypad.ch8", "rb");
+	//fp = fopen("roms/6-keypad.ch8", "rb");
 
 	// Additional test ROMs.
 	//fp = fopen("roms/delay_timer_test.ch8", "rb");	// Source: https://github.com/mattmikolay/chip-8/tree/master/delaytimer
@@ -728,7 +726,7 @@ void load_rom_from_file() {
 
 	// Non-test ROMs.
 	//fp = fopen("roms/snake.ch8", "rb");			// Source: https://github.com/JohnEarnest/chip8Archive/tree/master/src/snake
-	//fp = fopen("roms/caveexplorer.ch8", "rb");	// Source: https://github.com/JohnEarnest/chip8Archive/tree/master/src/caveexplorer
+	fp = fopen("roms/caveexplorer.ch8", "rb");	// Source: https://github.com/JohnEarnest/chip8Archive/tree/master/src/caveexplorer
 
 	// Determine file size by seeking to the end of the file and getting the current file position.
 	fseek(fp, 0, SEEK_END);
@@ -773,16 +771,21 @@ void load_font_sprites() {
 	}
 }
 
-void refresh_screen_and_decrement_timers() {
+void refresh_screen() {
 
 	while (is_running)
 	{
-		// Skip execution if not enough time has passed to reach next refresh/timer cycle.
-		if (waiting_for_next_refresh_and_timer_cycle())
+		// Skip execution if not enough time has passed to reach next refresh cycle.
+		if (waiting_for_next_refresh_cycle())
 			continue;
 
+		// Critical section used to protect user configureable values (TODO).
 		EnterCriticalSection(&critical_section);
 
+		// Execute the appropriate number of commands per frame.
+		execute_commands();
+
+		// Decrement timer values as appropriate.
 		if (delay_timer > 0)
 			delay_timer--;
 
@@ -801,32 +804,7 @@ void refresh_screen_and_decrement_timers() {
 	_endthread();
 }
 
-bool waiting_for_next_cpu_clock_cycle()
-{
-	bool is_waiting = true;
-
-	LARGE_INTEGER current_time = { 0 };
-	LARGE_INTEGER microseconds_since_last_clock_cycle = { 0 };
-	unsigned int microseconds_per_second = 1000000;
-
-	// Determine the number of microseconds that have elapsed since the previous clock cycle.
-	QueryPerformanceCounter(&current_time);
-	microseconds_since_last_clock_cycle.QuadPart = current_time.QuadPart - previous_clock_time.QuadPart;
-	microseconds_since_last_clock_cycle.QuadPart *= 1000000;
-	microseconds_since_last_clock_cycle.QuadPart /= qpc_frequency.QuadPart;
-
-	// Determine if enough time has passed to reach the next clock cycle based on the period.
-	if (microseconds_since_last_clock_cycle.QuadPart > (microseconds_per_second / execution_clock_speed_hz))
-	{
-		// Update saved timestamp if new clock cycle is reached.
-		QueryPerformanceCounter(&previous_clock_time);
-		is_waiting = false;
-	}
-
-	return is_waiting;
-}
-
-bool waiting_for_next_refresh_and_timer_cycle()
+bool waiting_for_next_refresh_cycle()
 {
 	bool is_waiting = true;
 
@@ -841,7 +819,7 @@ bool waiting_for_next_refresh_and_timer_cycle()
 	microseconds_since_last_clock_cycle.QuadPart /= qpc_frequency.QuadPart;
 
 	// Determine if enough time has passed to reach the next clock cycle based on the period.
-	if (microseconds_since_last_clock_cycle.QuadPart > (microseconds_per_second / refresh_and_timer_rate_hz))
+	if (microseconds_since_last_clock_cycle.QuadPart > (microseconds_per_second / REFRESH_RATE_HZ))
 	{
 		// Update saved timestamp if new clock cycle is reached.
 		QueryPerformanceCounter(&previous_refresh_time);
