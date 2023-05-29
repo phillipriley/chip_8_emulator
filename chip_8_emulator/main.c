@@ -475,38 +475,103 @@ void execute() {
 			case 0x0A:  // 0xFX0A
 				printf("Wait for a keypress and store the result in register VX.\n");
 
+				// TODO: Optimize?
 				if (KEY_PRESSED(0x31))			// 1 --> 1
+				{
+					// Wait for key to be released.
+					while (KEY_PRESSED(0x31));
 					v_reg[vx] = 0x1;
+				} 
 				else if (KEY_PRESSED(0x32))		// 2 --> 2
+				{
+					// Wait for key to be released.
+					while (KEY_PRESSED(0x32));
 					v_reg[vx] = 0x2;
+				}
 				else if (KEY_PRESSED(0x33))		// 3 --> 3
+				{
+					// Wait for key to be released.
+					while (KEY_PRESSED(0x33));
 					v_reg[vx] = 0x3;
+				}
 				else if (KEY_PRESSED(0x34))		// 4 --> C
+				{
+					// Wait for key to be released.
+					while (KEY_PRESSED(0x34));
 					v_reg[vx] = 0xC;
+				}
 				else if (KEY_PRESSED(0x51))		// Q --> 4
+				{
+					// Wait for key to be released.
+					while (KEY_PRESSED(0x51));
 					v_reg[vx] = 0x4;
+				}
 				else if (KEY_PRESSED(0x57))		// W --> 5
+				{
+					// Wait for key to be released.
+					while (KEY_PRESSED(0x57));
 					v_reg[vx] = 0x5;
+				}
 				else if (KEY_PRESSED(0x45))		// E --> 6
+				{
+					// Wait for key to be released.
+					while (KEY_PRESSED(0x45));
 					v_reg[vx] = 0x6;
+				}
 				else if (KEY_PRESSED(0x52))		// R --> D
+				{
+					// Wait for key to be released.
+					while (KEY_PRESSED(0x52));
 					v_reg[vx] = 0xD;
+				}
 				else if (KEY_PRESSED(0x41))		// A --> 7
+				{
+					// Wait for key to be released.
+					while (KEY_PRESSED(0x41));
 					v_reg[vx] = 0x7;
+				}
 				else if (KEY_PRESSED(0x53))		// S --> 8
+				{
+					// Wait for key to be released.
+					while (KEY_PRESSED(0x53));
 					v_reg[vx] = 0x8;
+				}
 				else if (KEY_PRESSED(0x44))		// D --> 9
+				{
+					// Wait for key to be released.
+					while (KEY_PRESSED(0x44));
 					v_reg[vx] = 0x9;
+				}
 				else if (KEY_PRESSED(0x46))		// F --> E
+				{
+					// Wait for key to be released.
+					while (KEY_PRESSED(0x46));
 					v_reg[vx] = 0xE;
+				}
 				else if (KEY_PRESSED(0x5A))		// Z --> A
+				{
+					// Wait for key to be released.
+					while (KEY_PRESSED(0x5A));
 					v_reg[vx] = 0xA;
+				}
 				else if (KEY_PRESSED(0x58))		// X --> 0
+				{
+					// Wait for key to be released.
+					while (KEY_PRESSED(0x58));
 					v_reg[vx] = 0x0;
+				}
 				else if (KEY_PRESSED(0x43))		// C --> B
+				{
+					// Wait for key to be released.
+					while (KEY_PRESSED(0x43));
 					v_reg[vx] = 0xB;
+				}
 				else if (KEY_PRESSED(0x56))		// V --> F
+				{
+					// Wait for key to be released.
+					while (KEY_PRESSED(0x56));
 					v_reg[vx] = 0xF;
+				}
 				else {
 					// Program counter should be reduced to hold execution at this instruction.
 					program_counter -= 2;
@@ -655,15 +720,15 @@ void load_rom_from_file() {
 	//fp = fopen("roms/3-corax+.ch8", "rb");
 	//fp = fopen("roms/4-flags.ch8", "rb");
 	//fp = fopen("roms/5-quirks.ch8", "rb");	// TODO: "Disp. Wait" error.
-	//fp = fopen("roms/6-keypad.ch8", "rb");	// TODO: "NOT RELEASED" error.
+	fp = fopen("roms/6-keypad.ch8", "rb");
 
 	// Additional test ROMs.
 	//fp = fopen("roms/delay_timer_test.ch8", "rb");	// Source: https://github.com/mattmikolay/chip-8/tree/master/delaytimer
 	//fp = fopen("roms/random_number_test.ch8", "rb");	// Source: https://github.com/mattmikolay/chip-8/tree/master/randomnumber
 
 	// Non-test ROMs.
-	//fp = fopen("roms/snake.ch8", "rb");		// Source: https://github.com/JohnEarnest/chip8Archive/tree/master/src/snake
-	fp = fopen("roms/caveexplorer.ch8", "rb");	// Source: https://github.com/JohnEarnest/chip8Archive/tree/master/src/caveexplorer
+	//fp = fopen("roms/snake.ch8", "rb");			// Source: https://github.com/JohnEarnest/chip8Archive/tree/master/src/snake
+	//fp = fopen("roms/caveexplorer.ch8", "rb");	// Source: https://github.com/JohnEarnest/chip8Archive/tree/master/src/caveexplorer
 
 	// Determine file size by seeking to the end of the file and getting the current file position.
 	fseek(fp, 0, SEEK_END);
