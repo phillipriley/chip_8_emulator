@@ -79,7 +79,7 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
 	case WM_DESTROY:
 		PostQuitMessage(0);
 		return 0;
-	// TODO: Capture keys that increase/decrease number of cycles per frame.
+		// TODO: Capture keys that increase/decrease number of cycles per frame.
 	default:
 		break;
 	}
@@ -479,7 +479,7 @@ void execute_commands() {
 					// Wait for key to be released.
 					while (KEY_PRESSED(0x31));
 					v_reg[vx] = 0x1;
-				} 
+				}
 				else if (KEY_PRESSED(0x32))		// 2 --> 2
 				{
 					// Wait for key to be released.
@@ -661,7 +661,7 @@ void execute_commands() {
 		}
 
 		remaining_commands--;
-	}	
+	}
 }
 
 void draw_display(HWND hwnd) {
@@ -714,7 +714,7 @@ void load_rom_from_file() {
 	// ---- Chip-8 Test Suite ----//
 	// Source: https://github.com/Timendus/chip8-test-suite
 	//fp = fopen("roms/1-chip8-logo.ch8", "rb");
-	//fp = fopen("roms/2-ibm-logo.ch8", "rb");
+	fp = fopen("roms/2-ibm-logo.ch8", "rb");
 	//fp = fopen("roms/3-corax+.ch8", "rb");
 	//fp = fopen("roms/4-flags.ch8", "rb");
 	//fp = fopen("roms/5-quirks.ch8", "rb");	// TODO: "Disp. Wait" error.
@@ -726,7 +726,7 @@ void load_rom_from_file() {
 
 	// Non-test ROMs.
 	//fp = fopen("roms/snake.ch8", "rb");			// Source: https://github.com/JohnEarnest/chip8Archive/tree/master/src/snake
-	fp = fopen("roms/caveexplorer.ch8", "rb");	// Source: https://github.com/JohnEarnest/chip8Archive/tree/master/src/caveexplorer
+	//fp = fopen("roms/caveexplorer.ch8", "rb");	// Source: https://github.com/JohnEarnest/chip8Archive/tree/master/src/caveexplorer
 
 	// Determine file size by seeking to the end of the file and getting the current file position.
 	fseek(fp, 0, SEEK_END);
@@ -812,16 +812,16 @@ bool waiting_for_next_refresh_cycle()
 	LARGE_INTEGER microseconds_since_last_clock_cycle = { 0 };
 	unsigned int microseconds_per_second = 1000000;
 
-	// Determine the number of microseconds that have elapsed since the previous clock cycle.
+	// Determine the number of microseconds that have elapsed since the previous screen refresh.
 	QueryPerformanceCounter(&current_time);
 	microseconds_since_last_clock_cycle.QuadPart = current_time.QuadPart - previous_refresh_time.QuadPart;
 	microseconds_since_last_clock_cycle.QuadPart *= 1000000;
 	microseconds_since_last_clock_cycle.QuadPart /= qpc_frequency.QuadPart;
 
-	// Determine if enough time has passed to reach the next clock cycle based on the period.
+	// Determine if enough time has passed to reach the next screen refresh based on the period.
 	if (microseconds_since_last_clock_cycle.QuadPart > (microseconds_per_second / REFRESH_RATE_HZ))
 	{
-		// Update saved timestamp if new clock cycle is reached.
+		// Update saved timestamp if new screen refresh is reached.
 		QueryPerformanceCounter(&previous_refresh_time);
 		is_waiting = false;
 	}
@@ -835,6 +835,11 @@ bool disassemble()
 	//		 Current implementation will treat data (such as sprites) as bad op_codes.
 	//       https://reverseengineering.stackexchange.com/questions/2347/what-is-the-algorithm-used-in-recursive-traversal-disassembly
 
+	// Current assumptions for recursive disassembly:
+	//		- Contiguous code block at beginning of the file.
+	//		- End of code is represented by a jump to the current program_counter.
+	//		- All non-code lines are considered sprite data and displayed as such.
+
 	// TODO: Update to read directly from file (decouple from loading ROM into memory).
 
 	FILE* fp;
@@ -845,6 +850,15 @@ bool disassemble()
 
 	// TODO: Constant for initial memory offset.
 	uint16_t current_position = 0x200;
+
+	// Variables to track call-stack for recursive traversal.
+	uint16_t disassembly_stack[12] = { 0 };
+	uint8_t disassembly_stack_index = 0;
+
+	// Flag to check if remaining lines are code (rather than data).
+	// Once end of code is reached (indicated by jump to current position)
+	// remaining file contents will be treated as sprite data.
+	bool is_code = true;
 
 	while (current_position < (sizeof(memory) - 1))
 	{
@@ -877,6 +891,28 @@ bool disassemble()
 		// Clear output for fall-through in error cases.
 		sprintf(output_string, "");
 
+		if (!is_code) {
+			// Write instruction to output file.
+
+			for (int i = 0; i < 16; i++)
+			{
+				if (((instruction >> (15 - i) & 0x1)))
+				{
+					sprintf(output_string, "X");
+					fputs(output_string, fp);
+				}
+				else
+				{
+					sprintf(output_string, " ");
+					fputs(output_string, fp);
+				}
+			}
+
+			sprintf(output_string, "\n");
+			fputs(output_string, fp);
+			continue;
+		}
+
 		// Categorize instruction based on first nibble.
 		switch (INSTR_FIRST_NIBBLE(instruction)) {
 
@@ -890,6 +926,7 @@ bool disassemble()
 
 			case 0xEE: // 0x00EE
 				sprintf(output_string, "RET");
+				current_position = disassembly_stack[disassembly_stack_index--];
 				break;
 
 			default:
@@ -900,10 +937,22 @@ bool disassemble()
 
 		case 0x1: // 0x1NNN
 			sprintf(output_string, "JP 0x%03X", nnn);
+
+			if (current_position == (nnn + 2))
+			{
+				is_code = false;
+			}
+			else
+			{
+				current_position = nnn;
+			}
+
 			break;
 
 		case 0x2: // 0x2NNN
 			sprintf(output_string, "CALL 0x%03X", nnn);
+			disassembly_stack[++disassembly_stack_index] = current_position;
+			current_position = nnn;
 			break;
 
 		case 0x3: // 0x3XNN
