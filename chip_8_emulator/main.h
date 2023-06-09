@@ -1,7 +1,7 @@
 #pragma once
 
 // TODO: Resolve warnings rather than ignoring them.
-#define _CRT_SECURE_NO_WARNINGS		
+#define _CRT_SECURE_NO_WARNINGS
 
 // Includes for standard libraries.
 #include <stdint.h>
@@ -15,6 +15,8 @@
 // Includes for the standalone debug console.
 #include <io.h>
 #include <fcntl.h>
+
+#include "disassembler.h"
 
 // Constants that define the size of the Chip-8 display.
 #define DISPLAY_HEIGHT 32
@@ -115,5 +117,3 @@ void refresh_screen();
 // Return true if not enough time has passed to refresh the screen.
 bool waiting_for_next_refresh_cycle();
 
-// Create a disassembled version of the currently loaded ROM.
-bool disassemble();

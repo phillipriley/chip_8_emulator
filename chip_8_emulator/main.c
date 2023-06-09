@@ -7,7 +7,9 @@ int WINAPI _tWinMain(HINSTANCE hInstance, HINSTANCE prevInstance, PSTR cmdLine, 
 	if (AllocConsole())
 	{
 		FILE* fi = 0;
+		freopen_s(&fi, "CONIN$", "r", stdin);
 		freopen_s(&fi, "CONOUT$", "w", stdout);
+		freopen_s(&fi, "CONOUT$", "w", stderr);
 	}
 
 	// Create window.
@@ -706,27 +708,28 @@ void clear_display() {
 void load_rom_from_file() {
 	printf("Loading ROM from file.\n");
 
-	// Read contents of ROM file.
 	// TODO: Allow selection / configuration of ROMs (i.e. don't hardcode file names).
-	// TODO: Add error handling (missing files, corruption, etc.).
-	FILE* fp;
-
 	// ---- Chip-8 Test Suite ----//
 	// Source: https://github.com/Timendus/chip8-test-suite
-	//fp = fopen("roms/1-chip8-logo.ch8", "rb");
-	fp = fopen("roms/2-ibm-logo.ch8", "rb");
-	//fp = fopen("roms/3-corax+.ch8", "rb");
-	//fp = fopen("roms/4-flags.ch8", "rb");
-	//fp = fopen("roms/5-quirks.ch8", "rb");	// TODO: "Disp. Wait" error.
-	//fp = fopen("roms/6-keypad.ch8", "rb");
+	//char* filename = "roms/1-chip8-logo.ch8";
+	//char* filename = "roms/2-ibm-logo.ch8";
+	//char* filename = "roms/3-corax+.ch8";
+	//char* filename = "roms/4-flags.ch8";
+	//char* filename = "roms/5-quirks.ch8";		// TODO: "Disp. Wait" error.
+	//char* filename = "roms/6-keypad.ch8";
 
 	// Additional test ROMs.
-	//fp = fopen("roms/delay_timer_test.ch8", "rb");	// Source: https://github.com/mattmikolay/chip-8/tree/master/delaytimer
-	//fp = fopen("roms/random_number_test.ch8", "rb");	// Source: https://github.com/mattmikolay/chip-8/tree/master/randomnumber
+	//char* filename = "roms/delay_timer_test.ch8";		// Source: https://github.com/mattmikolay/chip-8/tree/master/delaytimer
+	//char* filename = "roms/random_number_test.ch8";	// Source: https://github.com/mattmikolay/chip-8/tree/master/randomnumber
 
 	// Non-test ROMs.
-	//fp = fopen("roms/snake.ch8", "rb");			// Source: https://github.com/JohnEarnest/chip8Archive/tree/master/src/snake
-	//fp = fopen("roms/caveexplorer.ch8", "rb");	// Source: https://github.com/JohnEarnest/chip8Archive/tree/master/src/caveexplorer
+	//char* filename = "roms/snake.ch8";			// Source: https://github.com/JohnEarnest/chip8Archive/tree/master/src/snake
+	char* filename = "roms/caveexplorer.ch8";		// Source: https://github.com/JohnEarnest/chip8Archive/tree/master/src/caveexplorer
+
+	// Read contents of ROM file.
+	// TODO: Add error handling (missing files, corruption, etc.).
+	FILE* fp;
+	fp = fopen((filename), "rb");
 
 	// Determine file size by seeking to the end of the file and getting the current file position.
 	fseek(fp, 0, SEEK_END);
@@ -738,7 +741,7 @@ void load_rom_from_file() {
 	fread(memory + 0x200, size, 1, fp);
 
 	// TODO: Move to better location after testing.
-	disassemble();
+	disassemble(filename);
 
 	// Close the file.
 	fclose(fp);
@@ -827,326 +830,4 @@ bool waiting_for_next_refresh_cycle()
 	}
 
 	return is_waiting;
-}
-
-bool disassemble()
-{
-	// TODO: Update to disassemble recursively (versus current linear implementation).
-	//		 Current implementation will treat data (such as sprites) as bad op_codes.
-	//       https://reverseengineering.stackexchange.com/questions/2347/what-is-the-algorithm-used-in-recursive-traversal-disassembly
-
-	// Current assumptions for recursive disassembly:
-	//		- Contiguous code block at beginning of the file.
-	//		- End of code is represented by a jump to the current program_counter.
-	//		- All non-code lines are considered sprite data and displayed as such.
-
-	// TODO: Update to read directly from file (decouple from loading ROM into memory).
-
-	FILE* fp;
-	char output_string[255] = "";
-
-	// TODO: Create files in an output directory.
-	fp = fopen("disassembled_rom.txt", "w");
-
-	// TODO: Constant for initial memory offset.
-	uint16_t current_position = 0x200;
-
-	// Variables to track call-stack for recursive traversal.
-	uint16_t disassembly_stack[12] = { 0 };
-	uint8_t disassembly_stack_index = 0;
-
-	// Flag to check if remaining lines are code (rather than data).
-	// Once end of code is reached (indicated by jump to current position)
-	// remaining file contents will be treated as sprite data.
-	bool is_code = true;
-
-	while (current_position < (sizeof(memory) - 1))
-	{
-		// Fetch instruction from memory using program counter.
-		uint16_t instruction = (memory[current_position] << 8) ^ memory[current_position + 1];
-
-		// Increment program counter to address of next instruction in memory.
-		current_position += 2;
-
-		// Do not output to file if memory is zero.
-		if (instruction == 0)
-			continue;
-
-		// Write current memory address to output file.
-		sprintf(output_string, "%03X: ", current_position - 2);
-		fputs(output_string, fp);
-
-		// Write instruction to output file.
-		sprintf(output_string, "%04X\t", instruction);
-		fputs(output_string, fp);
-
-		// Decode instruction into all possible information.
-		uint8_t vx = INSTR_SECOND_NIBBLE(instruction);
-		uint8_t vy = INSTR_THIRD_NIBBLE(instruction);
-
-		uint8_t n = INSTR_FOURTH_NIBBLE(instruction);
-		uint8_t nn = INSTR_SECOND_BYTE(instruction);
-		uint16_t nnn = INSTR_MEM_ADDR(instruction);
-
-		// Clear output for fall-through in error cases.
-		sprintf(output_string, "");
-
-		if (!is_code) {
-			// Write instruction to output file.
-
-			for (int i = 0; i < 16; i++)
-			{
-				if (((instruction >> (15 - i) & 0x1)))
-				{
-					sprintf(output_string, "X");
-					fputs(output_string, fp);
-				}
-				else
-				{
-					sprintf(output_string, " ");
-					fputs(output_string, fp);
-				}
-			}
-
-			sprintf(output_string, "\n");
-			fputs(output_string, fp);
-			continue;
-		}
-
-		// Categorize instruction based on first nibble.
-		switch (INSTR_FIRST_NIBBLE(instruction)) {
-
-		case 0x0: // 0x00E0
-
-			switch (nn) {
-
-			case 0xE0: // 0x00E0
-				sprintf(output_string, "CLS");
-				break;
-
-			case 0xEE: // 0x00EE
-				sprintf(output_string, "RET");
-				current_position = disassembly_stack[disassembly_stack_index--];
-				break;
-
-			default:
-				break;
-			}
-
-			break;
-
-		case 0x1: // 0x1NNN
-			sprintf(output_string, "JP 0x%03X", nnn);
-
-			if (current_position == (nnn + 2))
-			{
-				is_code = false;
-			}
-			else
-			{
-				current_position = nnn;
-			}
-
-			break;
-
-		case 0x2: // 0x2NNN
-			sprintf(output_string, "CALL 0x%03X", nnn);
-			disassembly_stack[++disassembly_stack_index] = current_position;
-			current_position = nnn;
-			break;
-
-		case 0x3: // 0x3XNN
-			sprintf(output_string, "SE V%X, 0x%02X", vx, nn);
-			break;
-
-		case 0x4: // 0x4XNN
-			sprintf(output_string, "SNE V%X, 0x%02X", vx, nn);
-			break;
-
-		case 0x5: // 0x5XY0
-			sprintf(output_string, "SE V%X, V%X", vx, vy);
-			break;
-
-		case 0x6: // 0x6XNN
-			sprintf(output_string, "LD V%X, 0x%02X", vx, nn);
-			break;
-
-		case 0x7: // 0x7XNN
-			sprintf(output_string, "ADD V%X, 0x%02X", vx, nn);
-			break;
-
-		case 0x8:
-
-			switch (n) {
-			case 0x0: // 0x8XY0
-				sprintf(output_string, "LD V%X, V%X", vx, vy);
-				break;
-
-			case 0x1: // 0x8XY1
-				sprintf(output_string, "OR V%X, V%X", vx, vy);
-				break;
-
-			case 0x2: // 0x8XY2
-				sprintf(output_string, "AND V%X, V%X", vx, vy);
-				break;
-
-			case 0x3: // 0x8XY3
-				sprintf(output_string, "XOR V%X, V%X", vx, vy);
-				break;
-
-			case 0x4: // 0x8XY4
-				/*
-					Add the value of register VY to register VX
-					Set VF to 01 if a carry occurs
-					Set VF to 00 if a carry does not occur
-				*/
-				sprintf(output_string, "ADD V%X, V%X", vy, vx);
-				break;
-
-			case 0x5: // 0x8XY5
-				/*
-					Subtract the value of register VY from register VX
-					Set VF to 00 if a borrow occurs
-					Set VF to 01 if a borrow does not occur
-				*/
-				sprintf(output_string, "SUB V%X, V%X", vy, vx);
-				break;
-
-			case 0x6: // 0x8XY6
-				/*
-					Store the value of register VY shifted right one bit in register VX
-					Set register VF to the least significant bit prior to the shift
-					VY is unchanged
-				*/
-				sprintf(output_string, "SHR V%X {, V%X}", vy, vx);
-				break;
-
-			case 0x7: // 0x8XY5
-				/*
-					Set register VX to the value of VY minus VX
-					Set VF to 00 if a borrow occurs
-					Set VF to 01 if a borrow does not occur
-				*/
-				sprintf(output_string, "SUBN V%X, V%X", vx, vy);
-				break;
-
-			case 0xE: // 0x8XYE
-				/*
-					Store the value of register VY shifted left one bit in register VX
-					Set register VF to the most significant bit prior to the shift
-					VY is unchanged
-				*/
-				sprintf(output_string, "SHL V%X {, V%X}", vy, vx);
-				break;
-
-			default:
-				break;
-			}
-
-			break;
-
-		case 0x9: // 0x9XY0
-			sprintf(output_string, "SNE V%X, V%X", vx, vy);
-			break;
-
-		case 0xA: // 0xANNN
-			sprintf(output_string, "LD I, 0x%03X", nnn);
-			break;
-
-		case 0xB: // 0xBNNN
-			sprintf(output_string, "JP V0 0x%03X", nnn);
-			break;
-
-		case 0xC: // 0xCXNN
-			sprintf(output_string, "RND V%X, 0x%02X", vx, nn);
-			break;
-
-		case 0xD: // 0xDXYN
-			sprintf(output_string, "DRW V%X, V%X, 0x%X", vx, vy, n);
-			break;
-
-		case 0xE:  // 0xEXNN
-
-			switch (nn) {
-
-			case 0x9E:  // 0xEX9E
-				sprintf(output_string, "SKP V%X", vx);
-				break;
-
-			case 0xA1:  // 0xEXA1
-				sprintf(output_string, "SKNP V%X", vx);
-				break;
-
-			default:
-				break;
-			}
-
-			break;
-
-		case 0xF:  // 0xFXNN
-
-			switch (nn) {
-
-			case 0x07:  // 0xFX07
-				sprintf(output_string, "LD V%X, DT", vx);
-				break;
-
-			case 0x0A:  // 0xFX0A
-				sprintf(output_string, "LD V%X, K", vx);
-				break;
-
-			case 0x15:  // 0xFX15
-				sprintf(output_string, "LD DT, V%X", vx);
-				break;
-
-			case 0x18:  // 0xFX18
-				sprintf(output_string, "LD ST, V%X", vx);
-				break;
-
-			case 0x1E:  // 0xFX1E
-				sprintf(output_string, "ADD I, V%X", vx);
-				break;
-
-			case 0x29:  // 0xFX29
-				sprintf(output_string, "LD F, V%X", vx);
-				break;
-
-			case 0x33:  // 0xFX33
-				sprintf(output_string, "LD B, V%X", vx);
-				break;
-
-			case 0x55:  // 0xFX55
-				/*
-					Store the values of registers V0 to VX inclusive in memory starting at address I
-					I is set to I + X + 1 after operation
-				*/
-				sprintf(output_string, "LD [I], V%X", vx);
-				break;
-
-			case 0x65:  // 0xFX65
-				/*
-					Fill registers V0 to VX inclusive with the values stored in memory starting at address I
-					I is set to I + X + 1 after operation
-				*/
-				sprintf(output_string, "LD V%X, [I]", vx);
-				break;
-
-			default:
-				break;
-			}
-
-			break;
-
-		default:
-			break;
-		}
-
-		fputs(output_string, fp);
-		fputs("\n", fp);
-	}
-
-	// Close the file.
-	fclose(fp);
-
-	return false;
 }
