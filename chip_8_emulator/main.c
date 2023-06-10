@@ -29,7 +29,7 @@ int WINAPI _tWinMain(HINSTANCE hInstance, HINSTANCE prevInstance, PSTR cmdLine, 
 	}
 
 	// TODO: Create constants for window offset added in below?
-	_hwnd = CreateWindow(appName, appName, WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, (DISPLAY_WIDTH * PIXEL_SIZE) + 16, (DISPLAY_HEIGHT * PIXEL_SIZE) + 39, NULL, NULL, hInstance, NULL);
+	_hwnd = CreateWindow(appName, appName, WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, (DISPLAY_WIDTH * PIXEL_SIZE) + 16, (DISPLAY_HEIGHT * PIXEL_SIZE) + 230 + 39, NULL, NULL, hInstance, NULL);
 
 	ShowWindow(_hwnd, cmdShow);
 	UpdateWindow(_hwnd);
@@ -75,11 +75,12 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
 		return 0;
 	case WM_PAINT:
 		draw_display(hwnd);
+		draw_system_state_text(hwnd);
 		return 0;
 	case WM_DESTROY:
 		PostQuitMessage(0);
 		return 0;
-	// TODO: Capture keys that increase/decrease number of cycles per frame.
+		// TODO: Capture keys that increase/decrease number of cycles per frame.
 	default:
 		break;
 	}
@@ -479,7 +480,7 @@ void execute_commands() {
 					// Wait for key to be released.
 					while (KEY_PRESSED(0x31));
 					v_reg[vx] = 0x1;
-				} 
+				}
 				else if (KEY_PRESSED(0x32))		// 2 --> 2
 				{
 					// Wait for key to be released.
@@ -661,11 +662,11 @@ void execute_commands() {
 		}
 
 		remaining_commands--;
-	}	
+	}
 }
 
-void draw_display(HWND hwnd) {
-
+void draw_display(HWND hwnd)
+{
 	PAINTSTRUCT ps;
 	HBRUSH whiteBrush = CreateSolidBrush(RGB(255, 255, 255));
 	HBRUSH blackBrush = CreateSolidBrush(RGB(0, 0, 0));
@@ -725,8 +726,8 @@ void load_rom_from_file() {
 	//fp = fopen("roms/random_number_test.ch8", "rb");	// Source: https://github.com/mattmikolay/chip-8/tree/master/randomnumber
 
 	// Non-test ROMs.
-	//fp = fopen("roms/snake.ch8", "rb");			// Source: https://github.com/JohnEarnest/chip8Archive/tree/master/src/snake
-	fp = fopen("roms/caveexplorer.ch8", "rb");	// Source: https://github.com/JohnEarnest/chip8Archive/tree/master/src/caveexplorer
+	fp = fopen("roms/snake.ch8", "rb");			// Source: https://github.com/JohnEarnest/chip8Archive/tree/master/src/snake
+	//fp = fopen("roms/caveexplorer.ch8", "rb");	// Source: https://github.com/JohnEarnest/chip8Archive/tree/master/src/caveexplorer
 
 	// Determine file size by seeking to the end of the file and getting the current file position.
 	fseek(fp, 0, SEEK_END);
@@ -1101,3 +1102,96 @@ bool disassemble()
 
 	return false;
 }
+
+char** system_state_to_strings()
+{
+	int debug_chars = 500;
+	int debug_columns = 3;
+
+	char** result = malloc(debug_columns * sizeof(char*));
+
+	if (!result)
+		return NULL;
+
+	// Allocate memory for each column of the debug output and set it to an empty string.
+	for (int i = 0; i < debug_columns; i++)
+	{
+		result[i] = malloc(debug_chars * sizeof(char));
+
+		if (!result[i])
+			return NULL;
+
+		strcpy(result[i], "");
+	}
+
+	// --- Column 1 --- //
+	// Capture current state of general purpose registers.
+	for (int i = 0; i < 0x10; i++)
+	{
+		debug_chars -= sprintf(result[0] + strlen(result[0]), "V%X: 0x%02X\n", i, v_reg[i]);
+	}
+
+	// --- Column 2 --- //
+	// Capture current state of stack.
+	for (int i = 0; i < 12; i++)
+	{
+		debug_chars -= sprintf(result[1] + strlen(result[1]), "Stack[%02d]: 0x%04X\n", i, stack[i]);
+	}
+
+	// Capture current state of timers.
+	debug_chars -= sprintf(result[1] + strlen(result[1]), "\nDelay: 0x%02X\n", delay_timer);
+	debug_chars -= sprintf(result[1] + strlen(result[1]), "Sound: 0x%02X\n", sound_timer);
+
+	// --- Column 3 --- //
+	// Capture current state of timers.
+	debug_chars -= sprintf(result[2] + strlen(result[2]), "PC: 0x%02X\n", program_counter);
+	debug_chars -= sprintf(result[2] + strlen(result[2]), "IR: 0x%02X\n", index_register);
+
+	return result;
+}
+
+void draw_system_state_text(HWND hwnd)
+{
+	char** system_state_strings = system_state_to_strings();
+
+	RECT  rect;
+	PAINTSTRUCT ps;
+	HFONT hFont;
+	hFont = (HFONT)GetStockObject(ANSI_FIXED_FONT);
+	HBRUSH whiteBrush = CreateSolidBrush(RGB(255, 255, 255));
+
+	HDC hdc = BeginPaint(hwnd, &ps);
+
+	SelectObject(hdc, whiteBrush);
+	Rectangle(hdc, 0, 320, 640, 550);
+
+	SelectObject(hdc, hFont);
+	GetClientRect(hwnd, &rect);
+	SetTextColor(hdc, RGB(0x00, 0x00, 0x00));
+
+	SetBkMode(hdc, TRANSPARENT);
+	rect.top = 330;
+
+	// --- Column 1 --- //
+	rect.left = 10;
+	DrawTextA(hdc, system_state_strings[0], strlen(system_state_strings[0]), &rect, DT_NOCLIP);
+
+	// --- Column 2 --- //
+	rect.left = 110;
+	DrawTextA(hdc, system_state_strings[1], strlen(system_state_strings[1]), &rect, DT_NOCLIP);
+
+	// --- Column 3 --- //
+	rect.left = 310;
+	DrawTextA(hdc, system_state_strings[2], strlen(system_state_strings[2]), &rect, DT_NOCLIP);
+
+	EndPaint(hwnd, &ps);
+
+	free(system_state_strings[0]);
+	free(system_state_strings[1]);
+	free(system_state_strings[2]);
+
+	free(system_state_strings);
+}
+
+
+

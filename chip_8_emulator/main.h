@@ -117,3 +117,9 @@ bool waiting_for_next_refresh_cycle();
 
 // Create a disassembled version of the currently loaded ROM.
 bool disassemble();
+
+// Create an array of strings based on the current system state.
+char** system_state_to_strings();
+
+// Draw system state text to the window.
+void draw_system_state_text(HWND hwnd);
