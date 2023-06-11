@@ -94,11 +94,17 @@ bool display[DISPLAY_HEIGHT][DISPLAY_WIDTH];
 // String to hold mnemonic and data for current command.
 char current_command_string[255] = "";
 
+// Flag to track enable/disable for single step mode.
+bool single_step_mode = false;
+
+// Count of steps to run for single step mode.
+int single_step_command_count = 0;
+
 // Processes messages sent to GUI window.
 LRESULT CALLBACK WindowProcedure(HWND, UINT, WPARAM, LPARAM);
 
 // Executes a specific number of commands based on a user configureable value.
-void execute_commands();
+void execute_commands(int number_of_commands);
 
 // Draws the saved display state to the window.
 void draw_display(HWND hwnd);

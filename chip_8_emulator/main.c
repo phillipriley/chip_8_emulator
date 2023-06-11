@@ -81,6 +81,17 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
 		PostQuitMessage(0);
 		return 0;
 		// TODO: Capture keys that increase/decrease number of cycles per frame.
+	case WM_KEYDOWN:
+		if (wParam == VK_SHIFT)
+		{
+			single_step_mode = !single_step_mode;
+		}
+
+		if (wParam == VK_SPACE)
+		{
+			single_step_command_count++;
+		}
+
 	default:
 		break;
 	}
@@ -88,14 +99,11 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
 	return DefWindowProc(hwnd, message, wParam, lParam);
 }
 
-void execute_commands() {
+void execute_commands(int number_of_commands) {
 
 	// TODO: Update to run at a user-configurable clock speed.
-	// TODO: Update for single-step mode with user intput.
 
-	unsigned int remaining_commands = cycles_per_frame;
-
-	while (remaining_commands > 0)
+	while (number_of_commands > 0)
 	{
 		// Verify that program counter does not point past the end of memory.
 		if ((size_t)(program_counter + 1) > sizeof(memory))
@@ -682,7 +690,7 @@ void execute_commands() {
 		printf("%s\n", current_command_string);
 		strcpy(current_command_string, current_command_string);
 
-		remaining_commands--;
+		number_of_commands--;
 	}
 }
 
@@ -805,7 +813,15 @@ void refresh_screen() {
 		EnterCriticalSection(&critical_section);
 
 		// Execute the appropriate number of commands per frame.
-		execute_commands();
+		if (single_step_mode)
+		{
+			execute_commands(single_step_command_count);
+			single_step_command_count = 0;
+		}
+		else
+		{
+			execute_commands(cycles_per_frame);
+		}
 
 		// Decrement timer values as appropriate.
 		if (delay_timer > 0)
@@ -1127,7 +1143,7 @@ bool disassemble()
 char** system_state_to_strings()
 {
 	int debug_chars = 500;
-	int debug_columns = 3;
+	int debug_columns = 4;
 
 	char** result = malloc(debug_columns * sizeof(char*));
 
@@ -1159,10 +1175,6 @@ char** system_state_to_strings()
 		debug_chars -= sprintf(result[1] + strlen(result[1]), "Stack[%02d]: 0x%04X\n", i, stack[i]);
 	}
 
-	// Capture current state of timers.
-	debug_chars -= sprintf(result[1] + strlen(result[1]), "\nDelay: 0x%02X\n", delay_timer);
-	debug_chars -= sprintf(result[1] + strlen(result[1]), "Sound: 0x%02X\n", sound_timer);
-
 	// --- Column 3 --- //
 	// Capture current state of program counter / command.
 	debug_chars -= sprintf(result[2] + strlen(result[2]), "PC: 0x%02X\n", program_counter);
@@ -1171,6 +1183,15 @@ char** system_state_to_strings()
 	// Capture current state of index register.
 	// TODO: Capture current state of sprite (pointed to by index register).
 	debug_chars -= sprintf(result[2] + strlen(result[2]), "\nIR: 0x%02X\n", index_register);
+
+	// Capture current state of timers.
+	debug_chars -= sprintf(result[2] + strlen(result[2]), "\nDelay: 0x%02X\n", delay_timer);
+	debug_chars -= sprintf(result[2] + strlen(result[2]), "Sound: 0x%02X\n", sound_timer);
+
+
+	// --- Column 4 --- //
+	// Capture current state of single step mode.
+	debug_chars -= sprintf(result[3] + strlen(result[3]), "Single Step: %d\n(Shift = on/off)\n(Space = next)", single_step_mode);
 
 	return result;
 }
@@ -1209,11 +1230,16 @@ void draw_system_state_text(HWND hwnd)
 	rect.left = 310;
 	DrawTextA(hdc, system_state_strings[2], strlen(system_state_strings[2]), &rect, DT_NOCLIP);
 
+	// --- Column 4 --- //
+	rect.left = 500;
+	DrawTextA(hdc, system_state_strings[3], strlen(system_state_strings[3]), &rect, DT_NOCLIP);
+
 	EndPaint(hwnd, &ps);
 
 	free(system_state_strings[0]);
 	free(system_state_strings[1]);
 	free(system_state_strings[2]);
+	free(system_state_strings[3]);
 
 	free(system_state_strings);
 }
