@@ -91,6 +91,9 @@ uint8_t v_reg[0x10];
 // On/off state of display pixels.
 bool display[DISPLAY_HEIGHT][DISPLAY_WIDTH];
 
+// String to hold mnemonic and data for current command.
+char current_command_string[255] = "";
+
 // Processes messages sent to GUI window.
 LRESULT CALLBACK WindowProcedure(HWND, UINT, WPARAM, LPARAM);
 

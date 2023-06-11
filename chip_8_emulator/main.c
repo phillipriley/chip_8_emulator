@@ -109,6 +109,9 @@ void execute_commands() {
 		// Increment program counter to address of next instruction in memory.
 		program_counter += 2;
 
+		// Clear string that holds the current command.
+		strcpy(current_command_string, "");
+
 		// Decode instruction into all possible information.
 		uint8_t vx = INSTR_SECOND_NIBBLE(instruction);
 		uint8_t vy = INSTR_THIRD_NIBBLE(instruction);
@@ -125,13 +128,16 @@ void execute_commands() {
 				// 0x0NNN - Not implemented.
 
 			case 0xE0: // 0x00E0
-				printf("Clear screen.\n");
+				sprintf(current_command_string + strlen(current_command_string), "CLS");
 				clear_display();
 				break;
 
 			case 0xEE: // 0x00EE
-				printf("Return from subroutine.\n");
-				program_counter = stack[stack_index--];
+				sprintf(current_command_string + strlen(current_command_string), "RET (0x%04X)", stack[stack_index]);
+				//program_counter = stack[stack_index--];
+				program_counter = stack[stack_index];
+				stack[stack_index] = 0;
+				stack_index--;
 				break;
 
 			default:
@@ -142,41 +148,51 @@ void execute_commands() {
 			break;
 
 		case 0x1: // 0x1NNN
-			printf("Jump to new address.\n");
+			sprintf(current_command_string + strlen(current_command_string), "JP 0x%03X", nnn);
 			program_counter = nnn;
 			break;
 
 		case 0x2: // 0x2NNN
-			printf("Execute subroutine starting at address NNN.\n");
-			stack[++stack_index] = program_counter;
-			program_counter = nnn;
+			sprintf(current_command_string + strlen(current_command_string), "CALL 0x%03X", nnn);
+
+			if (stack_index < 10)
+			{
+				stack_index++;
+				stack[stack_index] = program_counter;
+				program_counter = nnn;
+			}
+			else
+			{
+				printf("ERROR: Stack overflow.");	// TODO: Error handling.
+			}
+
 			break;
 
 		case 0x3: // 0x3XNN
-			printf("Skip the following instruction if the value of register VX equals NN.\n");
+			sprintf(current_command_string + strlen(current_command_string), "SE V%X, 0x%02X", vx, nn);
 			if (v_reg[vx] == nn)
 				program_counter += 2;
 			break;
 
 		case 0x4: // 0x4XNN
-			printf("Skip the following instruction if the value of register VX is not equal to NN.\n");
+			sprintf(current_command_string + strlen(current_command_string), "SNE V%X, 0x%02X", vx, nn);
 			if (v_reg[vx] != nn)
 				program_counter += 2;
 			break;
 
 		case 0x5: // 0x5XY0
-			printf("Skip the following instruction if the value of register VX is equal to the value of register VY.\n");
+			sprintf(current_command_string + strlen(current_command_string), "SE V%X, V%X", vx, vy);
 			if (v_reg[vx] == v_reg[vy])
 				program_counter += 2;
 			break;
 
 		case 0x6: // 0x6XNN
-			printf("Set general purpose register.\n");
+			sprintf(current_command_string + strlen(current_command_string), "LD V%X, 0x%02X", vx, nn);
 			v_reg[vx] = nn;
 			break;
 
 		case 0x7: // 0x7XNN
-			printf("Add value to general purpose register.\n");
+			sprintf(current_command_string + strlen(current_command_string), "ADD V%X, 0x%02X", vx, nn);
 			v_reg[vx] += nn;
 			break;
 
@@ -186,24 +202,24 @@ void execute_commands() {
 
 			switch (n) {
 			case 0x0: // 0x8XY0
-				printf("Store the value of register VY in register VX.\n");
+				sprintf(current_command_string + strlen(current_command_string), "LD V%X, V%X", vx, vy);
 				v_reg[vx] = v_reg[vy];
 				break;
 
 			case 0x1: // 0x8XY1
-				printf("Set VX to VX OR VY.\n");
+				sprintf(current_command_string + strlen(current_command_string), "OR V%X, V%X", vx, vy);
 				v_reg[vx] |= v_reg[vy];
 				v_reg[0xF] = temp;
 				break;
 
 			case 0x2: // 0x8XY2
-				printf("Set VX to VX AND VY.\n");
+				sprintf(current_command_string + strlen(current_command_string), "AND V%X, V%X", vx, vy);
 				v_reg[vx] &= v_reg[vy];
 				v_reg[0xF] = temp;
 				break;
 
 			case 0x3: // 0x8XY3
-				printf("Set VX to VX XOR VY.\n");
+				sprintf(current_command_string + strlen(current_command_string), "XOR V%X, V%X", vx, vy);
 				v_reg[vx] ^= v_reg[vy];
 				v_reg[0xF] = temp;
 				break;
@@ -214,7 +230,7 @@ void execute_commands() {
 					Set VF to 01 if a carry occurs
 					Set VF to 00 if a carry does not occur
 				*/
-				printf("Add the value of register VY to register VX.\n");
+				sprintf(current_command_string + strlen(current_command_string), "ADD V%X, V%X", vy, vx);
 
 				// Capture carry flag prior to operation in case VF is being used.
 				if ((int)(v_reg[vx] + v_reg[vy]) > 255)
@@ -234,7 +250,7 @@ void execute_commands() {
 					Set VF to 00 if a borrow occurs
 					Set VF to 01 if a borrow does not occur
 				*/
-				printf("Subtract the value of register VY from register VX.\n");
+				sprintf(current_command_string + strlen(current_command_string), "SUB V%X, V%X", vy, vx);
 
 				// Capture borrow flag prior to operation in case VF is being used.
 				if (v_reg[vx] >= v_reg[vy])
@@ -254,7 +270,7 @@ void execute_commands() {
 					Set register VF to the least significant bit prior to the shift
 					VY is unchanged
 				*/
-				printf("Store the value of register VY shifted right one bit in register VX.\n");
+				sprintf(current_command_string + strlen(current_command_string), "SHR V%X {, V%X}", vy, vx);
 
 				temp = BIT(v_reg[vy], 7);
 
@@ -273,7 +289,7 @@ void execute_commands() {
 					Set VF to 00 if a borrow occurs
 					Set VF to 01 if a borrow does not occur
 				*/
-				printf("Set register VX to the value of VY minus VX.\n");
+				sprintf(current_command_string + strlen(current_command_string), "SUBN V%X, V%X", vx, vy);
 
 				v_reg[vx] = v_reg[vy] - v_reg[vx];
 
@@ -290,7 +306,7 @@ void execute_commands() {
 					Set register VF to the most significant bit prior to the shift
 					VY is unchanged
 				*/
-				printf("Store the value of register VY shifted right one bit in register VX.\n");
+				sprintf(current_command_string + strlen(current_command_string), "SHL V%X {, V%X}", vy, vx);
 
 				temp = BIT(v_reg[vy], 0);
 
@@ -311,28 +327,28 @@ void execute_commands() {
 			break;
 
 		case 0x9: // 0x9XY0
-			printf("Skip the following instruction if the value of register VX is not equal to the value of register VY.\n");
+			sprintf(current_command_string + strlen(current_command_string), "SNE V%X, V%X", vx, vy);
 			if (v_reg[vx] != v_reg[vy])
 				program_counter += 2;
 			break;
 
 		case 0xA: // 0xANNN
-			printf("Set index register.\n");
+			sprintf(current_command_string + strlen(current_command_string), "LD I, 0x%03X", nnn);
 			index_register = nnn;
 			break;
 
 		case 0xB: // 0xBNNN
-			printf("Jump to address NNN + V0.\n");
+			sprintf(current_command_string + strlen(current_command_string), "JP V0 0x%03X", nnn);
 			program_counter = nnn + v_reg[0x0];
 			break;
 
 		case 0xC: // 0xCXNN
-			printf("Set VX to a random number with a mask of NN.\n");
+			sprintf(current_command_string + strlen(current_command_string), "RND V%X, 0x%02X", vx, nn);
 			v_reg[vx] = rand() & nn;
 			break;
 
 		case 0xD: // 0xDXYN
-			printf("Draw screen.\n");
+			sprintf(current_command_string + strlen(current_command_string), "DRW V%X, V%X, 0x%X", vx, vy, n);
 
 			int x, x_start, y, y_start;
 			v_reg[0xF] = 0x0;
@@ -367,7 +383,9 @@ void execute_commands() {
 							v_reg[0xF] = 0x1;
 						}
 						else
+						{
 							display[y][x] = true;
+						}
 					}
 				}
 			}
@@ -379,7 +397,7 @@ void execute_commands() {
 			switch (nn) {
 
 			case 0x9E:  // 0xEX9E
-				printf("Skip the following instruction if the key corresponding to the hex value currently stored in register VX is pressed.\n");
+				sprintf(current_command_string + strlen(current_command_string), "SKP V%X", vx);
 
 				// TODO: Implement in a more efficient / readable way?
 				if (v_reg[vx] == 0x1 && KEY_PRESSED(0x31))			// 1 --> 1
@@ -418,7 +436,7 @@ void execute_commands() {
 				break;
 
 			case 0xA1:  // 0xEXA1
-				printf("Skip the following instruction if the key corresponding to the hex value currently stored in register VX is not pressed.\n");
+				sprintf(current_command_string + strlen(current_command_string), "SKNP V%X", vx);
 
 				if (v_reg[vx] == 0x1 && !KEY_PRESSED(0x31))				// 1 --> 1
 					program_counter += 2;
@@ -467,12 +485,12 @@ void execute_commands() {
 			switch (nn) {
 
 			case 0x07:  // 0xFX07
-				printf("Store the current value of the delay timer in register VX.\n");
+				sprintf(current_command_string + strlen(current_command_string), "LD V%X, DT", vx);
 				v_reg[vx] = delay_timer;
 				break;
 
 			case 0x0A:  // 0xFX0A
-				printf("Wait for a keypress and store the result in register VX.\n");
+				sprintf(current_command_string + strlen(current_command_string), "LD V%X, K", vx);
 
 				// TODO: Optimize?
 				if (KEY_PRESSED(0x31))			// 1 --> 1
@@ -579,7 +597,7 @@ void execute_commands() {
 				break;
 
 			case 0x15:  // 0xFX15
-				printf("Set the delay timer to the value of register VX.\n");
+				sprintf(current_command_string + strlen(current_command_string), "LD DT, V%X", vx);
 
 				EnterCriticalSection(&critical_section);
 				delay_timer = v_reg[vx];
@@ -588,7 +606,7 @@ void execute_commands() {
 				break;
 
 			case 0x18:  // 0xFX18
-				printf("Set the sound timer to the value of register VX.\n");
+				sprintf(current_command_string + strlen(current_command_string), "LD ST, V%X", vx);
 
 				EnterCriticalSection(&critical_section);
 				sound_timer = v_reg[vx];
@@ -597,17 +615,17 @@ void execute_commands() {
 				break;
 
 			case 0x1E:  // 0xFX1E
-				printf("Add the value stored in register VX to register I.\n");
+				sprintf(current_command_string + strlen(current_command_string), "ADD I, V%X", vx);
 				index_register += v_reg[vx];
 				break;
 
 			case 0x29:  // 0xFX29
-				printf("Set I to the memory address of the sprite data corresponding to the hexadecimal digit stored in register VX.\n");
+				sprintf(current_command_string + strlen(current_command_string), "LD F, V%X", vx);
 				index_register = FONT_ADDR_START + (v_reg[vx] * FONT_CHARACTER_SIZE_BYTES);
 				break;
 
 			case 0x33:  // 0xFX33
-				printf("Store the binary-coded decimal equivalent of the value stored in register VX at addresses I, I + 1, and I + 2.\n");
+				sprintf(current_command_string + strlen(current_command_string), "LD B, V%X", vx);
 
 				memory[index_register] = v_reg[vx] / 100;
 				memory[index_register + 1] = (v_reg[vx] / 10) % 10;
@@ -620,7 +638,7 @@ void execute_commands() {
 					Store the values of registers V0 to VX inclusive in memory starting at address I
 					I is set to I + X + 1 after operation
 				*/
-				printf("Store the values of registers V0 to VX inclusive in memory starting at address I.\n");
+				sprintf(current_command_string + strlen(current_command_string), "LD [I], V%X", vx);
 
 				for (int i = 0; i <= vx; i++)
 				{
@@ -637,7 +655,7 @@ void execute_commands() {
 					Fill registers V0 to VX inclusive with the values stored in memory starting at address I
 					I is set to I + X + 1 after operation
 				*/
-				printf("Fill registers V0 to VX inclusive with the values stored in memory starting at address I.\n");
+				sprintf(current_command_string + strlen(current_command_string), "LD V%X, [I]", vx);
 
 				for (int i = 0; i <= vx; i++)
 				{
@@ -660,6 +678,9 @@ void execute_commands() {
 			NOT_IMPLEMENTED;
 			break;
 		}
+
+		printf("%s\n", current_command_string);
+		strcpy(current_command_string, current_command_string);
 
 		remaining_commands--;
 	}
@@ -1143,9 +1164,13 @@ char** system_state_to_strings()
 	debug_chars -= sprintf(result[1] + strlen(result[1]), "Sound: 0x%02X\n", sound_timer);
 
 	// --- Column 3 --- //
-	// Capture current state of timers.
+	// Capture current state of program counter / command.
 	debug_chars -= sprintf(result[2] + strlen(result[2]), "PC: 0x%02X\n", program_counter);
-	debug_chars -= sprintf(result[2] + strlen(result[2]), "IR: 0x%02X\n", index_register);
+	debug_chars -= sprintf(result[2] + strlen(result[2]), "CMD: %s\n", current_command_string);
+
+	// Capture current state of index register.
+	// TODO: Capture current state of sprite (pointed to by index register).
+	debug_chars -= sprintf(result[2] + strlen(result[2]), "\nIR: 0x%02X\n", index_register);
 
 	return result;
 }
