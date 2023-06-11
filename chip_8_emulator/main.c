@@ -92,6 +92,16 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
 			single_step_command_count++;
 		}
 
+		if (wParam == VK_LEFT)
+		{
+			cycles_per_frame -= 5;
+		}
+
+		if (wParam == VK_RIGHT)
+		{
+			cycles_per_frame += 5;
+		}
+
 	default:
 		break;
 	}
@@ -1191,7 +1201,9 @@ char** system_state_to_strings()
 
 	// --- Column 4 --- //
 	// Capture current state of single step mode.
-	debug_chars -= sprintf(result[3] + strlen(result[3]), "Single Step: %d\n(Shift = on/off)\n(Space = next)", single_step_mode);
+	debug_chars -= sprintf(result[3] + strlen(result[3]), "Single Step: %d\n(Shift = on/off)\n(Space = next)\n", single_step_mode);
+
+	debug_chars -= sprintf(result[3] + strlen(result[3]), "\nCycles/Frame: %d\n(Right = +5)\n(Left = -5)", cycles_per_frame);
 
 	return result;
 }
