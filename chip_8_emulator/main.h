@@ -11,6 +11,7 @@
 // Includes for Windows GUI functionality.
 #include <windows.h>
 #include <tchar.h>
+#include <process.h>
 
 // Includes for the standalone debug console.
 #include <io.h>

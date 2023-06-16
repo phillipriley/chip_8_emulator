@@ -50,7 +50,7 @@ int WINAPI _tWinMain(HINSTANCE hInstance, HINSTANCE prevInstance, PSTR cmdLine, 
 		return;
 
 	// TODO: Resolve warnings on the following line (and elsewhere).
-	(HANDLE)_beginthread(refresh_screen, 0);
+	_beginthread(refresh_screen, 0, NULL);
 
 	while (GetMessage(&msg, NULL, 0, 0)) {
 		TranslateMessage(&msg);
@@ -122,7 +122,8 @@ void execute_commands(int number_of_commands) {
 		// Fetch instruction from memory using program counter.
 		uint16_t instruction = (memory[program_counter] << 8) ^ memory[program_counter + 1];
 
-		printf("\nInstr: 0x%X\n", instruction);
+		printf("\nPC: 0x%X\n", program_counter);
+		printf("Instr: 0x%X\n", instruction);
 
 		// Increment program counter to address of next instruction in memory.
 		program_counter += 2;
@@ -664,8 +665,6 @@ void execute_commands(int number_of_commands) {
 					index_register++;
 				}
 
-				index_register++;
-
 				break;
 
 			case 0x65:  // 0xFX65
@@ -680,8 +679,6 @@ void execute_commands(int number_of_commands) {
 					v_reg[i] = memory[index_register];
 					index_register++;
 				}
-
-				index_register++;
 
 				break;
 
@@ -1255,6 +1252,3 @@ void draw_system_state_text(HWND hwnd)
 
 	free(system_state_strings);
 }
-
-
-
